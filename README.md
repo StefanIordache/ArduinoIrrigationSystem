@@ -1,4 +1,4 @@
-# Arduino IrrigationS ystem
+# Arduino Irrigation System
 An irrigation system built with Arduino Uno R3
 
 Link Bill of Material (BOM): https://docs.google.com/spreadsheets/d/1g82J1nOvGN7cDaFHDwJvao99QfbgMDixFHSb_e4Ozuw/edit?usp=sharing
