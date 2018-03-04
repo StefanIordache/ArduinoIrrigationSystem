@@ -49,6 +49,15 @@
 #define IN_MENU_CRITICAL_LEVEL 3
 #define IN_MENU_PUMP_TIME 4
 
+#define PUMP_SPAN_BETWEEN_CYCLES 10000
+#define MIN_CRITICAL_LEVEL 1
+#define MAX_CRITICAL_LEVEL 99
+#define MIN_PUMP_TIME 1000
+#define MAX_PUMP_TIME 99000
+#define ARDUINO_ONE_SECOND 1000
+#define ARDUINO_TEN_SECONDS 10000
+#define PUMP_TIME_STEP 1000
+
 IRrecv irrecv(PIN_IR_RECEIVER);
 decode_results results;
 
@@ -87,9 +96,7 @@ public:
   void setHumidity()
   {
     digitalWrite(PIN_HUMIDITY_SENSOR_VCC, HIGH);
-    Serial.println(analogRead(PIN_HUMIDTY_SENSOR_VALUE));
     this->humidity = map(analogRead(PIN_HUMIDTY_SENSOR_VALUE),0,1023,0,100);
-    Serial.println(this->humidity);
     digitalWrite(PIN_HUMIDITY_SENSOR_VCC, LOW);
   }
   
@@ -195,7 +202,7 @@ public:
     lcd.setCursor(0,0);
     lcd.print("New pump time");
     lcd.setCursor(0,1);
-    lcd.print(localConfiguration.pumpTime/1000);
+    lcd.print(localConfiguration.pumpTime/PUMP_TIME_STEP);
   }
 
   void turnOnLcd()
@@ -380,6 +387,7 @@ void setup()
   pinMode(PIN_LED_RED, OUTPUT);
   pinMode(PIN_LED_BLUE, OUTPUT);
   pinMode(PIN_HUMIDITY_SENSOR_VCC, OUTPUT);
+  pinMode(PIN_PUMP_SWITCH,OUTPUT);
 
   digitalWrite(PIN_HUMIDITY_SENSOR_VCC, LOW);
   
@@ -405,13 +413,13 @@ void loop()
   }
   
   //Initial setup when plugging the arduino board
-  if (display.getInitialSetupState() == false && currentArduinoTime > 1000)
+  if (display.getInitialSetupState() == false && currentArduinoTime > ARDUINO_ONE_SECOND)
   {
     display.initialSetup();
   }
 
   //Get humidity from soil each second.
-  if (currentArduinoTime > 0 && currentArduinoTime % 1000 == 0)
+  if (currentArduinoTime > 0 && currentArduinoTime % ARDUINO_ONE_SECOND == 0)
   {
     humiditySensor.setHumidity();
     if (display.getScreenState() == IN_INFORMATIONS_1)
@@ -514,7 +522,7 @@ void menuControl()
       {
         if (displayScreenState == IN_MENU_CRITICAL_LEVEL)
         {
-          if (localConfiguration.criticalLevel < 99)
+          if (localConfiguration.criticalLevel < MAX_CRITICAL_LEVEL)
           {
             ++localConfiguration.criticalLevel;
             display.displayCriticalLevelMenu();
@@ -522,9 +530,9 @@ void menuControl()
         }
         else
         {
-          if (localConfiguration.pumpTime < 99000)
+          if (localConfiguration.pumpTime < MAX_PUMP_TIME)
           {
-            localConfiguration.pumpTime += 1000;
+            localConfiguration.pumpTime += PUMP_TIME_STEP;
             display.displayPumpTimeMenu();
           }
         }
@@ -534,7 +542,7 @@ void menuControl()
       {
         if (displayScreenState == IN_MENU_CRITICAL_LEVEL)
         {
-          if (localConfiguration.criticalLevel > 1)
+          if (localConfiguration.criticalLevel > MIN_CRITICAL_LEVEL)
           {
             --localConfiguration.criticalLevel;
             display.displayCriticalLevelMenu();
@@ -542,9 +550,9 @@ void menuControl()
         }
         else
         {
-          if (localConfiguration.pumpTime > 1000)
+          if (localConfiguration.pumpTime > MIN_PUMP_TIME)
           {
-            localConfiguration.pumpTime -= 1000;
+            localConfiguration.pumpTime -= PUMP_TIME_STEP;
             display.displayPumpTimeMenu();
           }
         }
@@ -558,6 +566,7 @@ void menuControl()
         display.setScreenState(IN_INFORMATIONS_1);
         pump.setLastStopTime(currentArduinoTime);
       }
+      //Cancel configuration
       else if ((displayScreenState == IN_MENU_CRITICAL_LEVEL || displayScreenState == IN_MENU_PUMP_TIME) && results.value == IR_CANCEL_CONFIGURATION)
       {
         localConfiguration = configuration;
@@ -575,7 +584,7 @@ void pumpControl()
 {
   int displayScreenState = display.getScreenState();
   //Pump control
-  if (currentArduinoTime > 10000 && (displayScreenState == IN_INFORMATIONS_1 || displayScreenState == IN_INFORMATIONS_2))
+  if (currentArduinoTime > ARDUINO_TEN_SECONDS && (displayScreenState == IN_INFORMATIONS_1 || displayScreenState == IN_INFORMATIONS_2))
   {
     //Check if pump is active and also check if it should pe stopped
     if (pump.getActiveState())
@@ -604,9 +613,9 @@ void pumpControl()
       }
     }
 
-    //Else, check by mode if any action should be taken
-    else if (!pump.getActiveState() && currentArduinoTime - pump.getLastStopTime() > 10000 && configuration.criticalLevel > humiditySensor.getHumidity())
-    //else if (!pump.getActiveState() && currentArduinoTime - pump.getLastStopTime() > 10000 && 5<6)
+    //Else, check by mode, if the humidity level is under the critical level (turn red led on)
+    //If the mode is on auto start the pump
+    else if (!pump.getActiveState() && currentArduinoTime - pump.getLastStopTime() > PUMP_SPAN_BETWEEN_CYCLES && configuration.criticalLevel > humiditySensor.getHumidity())
     {
       if (!configuration.mode && !ledRed.getState())
       {
